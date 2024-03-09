@@ -4,12 +4,17 @@ use std::sync::{
 };
 
 use actix_web::{web, App, HttpServer};
-use happye_bot::{auth::TwitchAuthState, request_endpoints::auth, twitch_bot};
+use happye_bot::{
+    auth::TwitchAuthState,
+    error::{TwitchBotError, TwitchBotResult},
+    request_endpoints::auth,
+    twitch_bot,
+};
 use tokio::sync::Mutex;
 use tracing_subscriber::{self, filter, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 #[tokio::main]
-pub async fn main() -> std::io::Result<()> {
+pub async fn main() -> TwitchBotResult<()> {
     //Initialize environment variables and tracing
     init_env();
 
@@ -48,7 +53,7 @@ pub async fn main() -> std::io::Result<()> {
 
     let shutdown = tokio::spawn(async move {
         // listen for ctrl-c
-        tokio::signal::ctrl_c().await.unwrap();
+        tokio::signal::ctrl_c().await?;
 
         // start shutdown of tasks
         let server_stop = server_handle.stop(true);
@@ -56,6 +61,8 @@ pub async fn main() -> std::io::Result<()> {
 
         // await shutdown of tasks
         server_stop.await;
+
+        Ok::<(), TwitchBotError>(())
     });
 
     //Bot scopes
@@ -75,7 +82,9 @@ pub async fn main() -> std::io::Result<()> {
     //Join all tasks and wait for the shutdown signal
     tokio::try_join!(server_task, twitch_bot_task, shutdown)
         .expect("unable to join tasks")
-        .0
+        .0?;
+
+    Ok(())
 }
 
 fn init_env() {

@@ -6,6 +6,8 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 
+use crate::error::TwitchBotResult;
+
 pub struct TwitchAuthState {
     pub auth_code: Arc<Mutex<String>>,
 }
@@ -24,8 +26,8 @@ pub struct TwitchTokenStorage {
 
 #[async_trait]
 impl TokenStorage for TwitchTokenStorage {
-    type LoadError = std::io::Error;
-    type UpdateError = std::io::Error;
+    type LoadError = crate::error::TwitchBotError;
+    type UpdateError = crate::error::TwitchBotError;
 
     async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
         Ok(self.token.clone())
@@ -49,26 +51,21 @@ pub async fn get_user_access_token_async(
     client_secret: String,
     user_auth_code: String,
     port: u16,
-) -> UserAccessToken {
+) -> TwitchBotResult<UserAccessToken> {
     //Make http request for access token
     let client = reqwest::Client::new();
     let url = "https://id.twitch.tv/oauth2/token";
     let body = format!("client_id={}&client_secret={}&code={}&grant_type=authorization_code&redirect_uri=http://localhost:{}/auth",
                        client_id, client_secret, user_auth_code, port);
 
-    let auth_request = client
-        .post(url)
-        .body(body)
-        .send()
-        .await
-        .expect("Could not post request for auth token");
+    let auth_request = client.post(url).body(body).send().await?;
 
-    let auth_response = auth_request.json::<TwitchOAuthResponse>().await.unwrap();
+    let auth_response = auth_request.json::<TwitchOAuthResponse>().await?;
 
-    UserAccessToken {
+    Ok(UserAccessToken {
         access_token: auth_response.access_token,
         created_at: Utc::now(),
         expires_at: Some(Utc::now() + Duration::try_seconds(auth_response.expires_in).unwrap()),
         refresh_token: auth_response.refresh_token,
-    }
+    })
 }
