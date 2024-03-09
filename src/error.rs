@@ -9,6 +9,9 @@ pub enum TwitchBotError {
     #[error(transparent)]
     TwitchIrcValidationError(#[from] twitch_irc::validate::Error),
 
+    #[error(transparent)]
+    SerdeJsonError(#[from] serde_json::Error),
+
     #[error("Could not load Twitch Token")]
     TwitchTokenLoadError(),
 

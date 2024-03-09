@@ -5,7 +5,7 @@ use std::sync::{
 
 use actix_web::{web, App, HttpServer};
 use happye_bot::{
-    auth::TwitchAuthState,
+    auth::{open_browser_and_authenticate, TwitchAuthState},
     error::{TwitchBotError, TwitchBotResult},
     request_endpoints::auth,
     twitch_bot,
@@ -17,6 +17,7 @@ use tracing_subscriber::{self, filter, layer::SubscriberExt, util::SubscriberIni
 pub async fn main() -> TwitchBotResult<()> {
     //Initialize environment variables and tracing
     init_env();
+    let token_ok = tokio::fs::metadata("token.json").await.is_ok();
 
     //Twitch credentials
     let client_id = std::env::var("TWITCH_CLIENT_ID").expect("Twitch client id must be set");
@@ -47,6 +48,7 @@ pub async fn main() -> TwitchBotResult<()> {
         client_id.clone(),
         client_secret.clone(),
         port,
+        token_ok,
         Arc::clone(&auth_token),
         Arc::clone(&task_shutdown_marker),
     ));
@@ -65,19 +67,10 @@ pub async fn main() -> TwitchBotResult<()> {
         Ok::<(), TwitchBotError>(())
     });
 
-    //Bot scopes
-    let scopes = vec!["chat:edit", "chat:read"].join("+").replace(":", "%3A");
-
-    //Open browser to get auth token
-    let open_params = format!(
-        "response_type=code&client_id={}&redirect_uri=http://localhost:{}/auth&scope={}",
-        client_id, port, scopes
-    );
-
-    let _ = open::that(format!(
-        "https://id.twitch.tv/oauth2/authorize?{}",
-        open_params
-    ));
+    //Open browser to get auth token if token doesn't exist locally
+    if !token_ok {
+        open_browser_and_authenticate(client_id, port);
+    }
 
     //Join all tasks and wait for the shutdown signal
     tokio::try_join!(server_task, twitch_bot_task, shutdown)

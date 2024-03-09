@@ -24,16 +24,19 @@ pub async fn run_async(
     client_id: String,
     client_secret: String,
     port: u16,
+    token_ok: bool,
     auth_token: Arc<Mutex<String>>,
     shutdown_marker: Arc<AtomicBool>,
 ) -> TwitchBotResult<()> {
-    while auth_token.lock().await.as_str() == "" {
-        if shutdown_marker.load(Ordering::SeqCst) {
-            return Ok(());
-        }
+    if !token_ok {
+        while auth_token.lock().await.as_str() == "" {
+            if shutdown_marker.load(Ordering::SeqCst) {
+                return Ok(());
+            }
 
-        tracing::info!("Waiting for auth token");
-        sleep(Duration::from_millis(1000)).await;
+            tracing::info!("Waiting for auth token");
+            sleep(Duration::from_millis(1000)).await;
+        }
     }
 
     let auth_token_value = auth_token.lock().await.clone();

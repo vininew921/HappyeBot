@@ -1,3 +1,7 @@
 /target
 
+# Env variables
 .env
+
+# Token cache
+token.json
