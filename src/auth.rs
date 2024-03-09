@@ -18,24 +18,21 @@ pub struct TwitchUserAuthResponse {
 }
 
 #[derive(Debug)]
-pub struct HappyeBotTokenStorage {
-    pub token: Option<UserAccessToken>,
+pub struct TwitchTokenStorage {
+    pub token: UserAccessToken,
 }
 
 #[async_trait]
-impl TokenStorage for HappyeBotTokenStorage {
+impl TokenStorage for TwitchTokenStorage {
     type LoadError = std::io::Error;
     type UpdateError = std::io::Error;
 
     async fn load_token(&mut self) -> Result<UserAccessToken, Self::LoadError> {
-        self.token.clone().ok_or(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Token not found",
-        ))
+        Ok(self.token.clone())
     }
 
     async fn update_token(&mut self, token: &UserAccessToken) -> Result<(), Self::UpdateError> {
-        self.token = Some(token.clone());
+        self.token = token.clone();
         Ok(())
     }
 }
@@ -47,7 +44,7 @@ struct TwitchOAuthResponse {
     refresh_token: String,
 }
 
-pub async fn get_user_access_token(
+pub async fn get_user_access_token_async(
     client_id: String,
     client_secret: String,
     user_auth_code: String,
@@ -56,17 +53,17 @@ pub async fn get_user_access_token(
     //Make http request for access token
     let client = reqwest::Client::new();
     let url = "https://id.twitch.tv/oauth2/token";
-    let body = format!("client_id={}&client_secret={}&code={}&grant_type=authorization_code&redirect_uri=http://localhost:{}/auth", client_id, client_secret, user_auth_code, port);
+    let body = format!("client_id={}&client_secret={}&code={}&grant_type=authorization_code&redirect_uri=http://localhost:{}/auth",
+                       client_id, client_secret, user_auth_code, port);
 
-    let auth_response = client
+    let auth_request = client
         .post(url)
         .body(body)
         .send()
         .await
-        .expect("Could not post request for auth token")
-        .json::<TwitchOAuthResponse>()
-        .await
-        .unwrap();
+        .expect("Could not post request for auth token");
+
+    let auth_response = auth_request.json::<TwitchOAuthResponse>().await.unwrap();
 
     UserAccessToken {
         access_token: auth_response.access_token,
