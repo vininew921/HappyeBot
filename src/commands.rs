@@ -6,17 +6,17 @@ use lazy_static::lazy_static;
 #[derive(Debug, Clone)]
 pub struct Command {
     pub response: String,
-    pub tag_user: bool,
     pub timeout_seconds: u32,
+    pub api_call: Option<String>,
     last_called: Option<DateTime<Utc>>,
 }
 
 impl Command {
-    pub fn new(response: String, tag_user: bool, timeout_seconds: u32) -> Self {
+    pub fn new(response: String, timeout_seconds: u32, api_call: Option<String>) -> Self {
         Self {
             response,
-            tag_user,
             timeout_seconds,
+            api_call,
             last_called: None,
         }
     }
@@ -51,11 +51,19 @@ pub fn get_command(command_text: String) -> Option<Command> {
 lazy_static! {
     static ref COMMANDS: Mutex<HashMap<&'static str, Command>> = {
         let mut commands = HashMap::new();
-        commands.insert("!hi", Command::new("Salve @<user>".to_string(), true, 10));
 
         commands.insert(
             "!github",
-            Command::new("https://github.com/vininew921".to_string(), false, 60),
+            Command::new("https://github.com/vininew921".to_string(), 60, None),
+        );
+
+        commands.insert(
+            "!sr",
+            Command::new(
+                "Musica <song> adicionada a fila".to_string(),
+                30,
+                Some("play_track".to_string()),
+            ),
         );
 
         Mutex::new(commands)

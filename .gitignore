@@ -4,4 +4,5 @@
 .env
 
 # Token cache
-token.json
+twitch_token.json
+spotify_token.json

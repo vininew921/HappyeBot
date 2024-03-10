@@ -1,16 +1,10 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use serde::Deserialize;
-use tokio::{io::AsyncReadExt, sync::Mutex};
+use tokio::io::AsyncReadExt;
 use twitch_irc::login::{TokenStorage, UserAccessToken};
 
 use crate::error::TwitchBotResult;
-
-pub struct TwitchAuthState {
-    pub auth_code: Arc<Mutex<String>>,
-}
 
 #[derive(Deserialize)]
 pub struct TwitchUserAuthResponse {
@@ -53,7 +47,7 @@ pub async fn get_user_access_token_async(
     port: u16,
 ) -> TwitchBotResult<UserAccessToken> {
     //Get token from file, if it doens't exist, make request
-    if let Ok(mut token_file) = tokio::fs::File::open("token.json").await {
+    if let Ok(mut token_file) = tokio::fs::File::open("twitch_token.json").await {
         let mut contents = String::new();
         token_file.read_to_string(&mut contents).await?;
         let token: UserAccessToken = serde_json::from_str(&contents)?;
@@ -79,21 +73,7 @@ pub async fn get_user_access_token_async(
     };
 
     //Save access token to file
-    tokio::fs::write("token.json", serde_json::to_string(&access_token)?).await?;
+    tokio::fs::write("twitch_token.json", serde_json::to_string(&access_token)?).await?;
 
     Ok(access_token)
-}
-
-pub fn open_browser_and_authenticate(client_id: String, port: u16) {
-    let scopes = vec!["chat:edit", "chat:read"].join("+").replace(":", "%3A");
-
-    let open_params = format!(
-        "response_type=code&client_id={}&redirect_uri=http://localhost:{}/auth&scope={}",
-        client_id, port, scopes
-    );
-
-    let _ = open::that(format!(
-        "https://id.twitch.tv/oauth2/authorize?{}",
-        open_params
-    ));
 }
