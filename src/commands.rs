@@ -7,15 +7,25 @@ use lazy_static::lazy_static;
 pub struct Command {
     pub response: String,
     pub timeout_seconds: u32,
+    pub usage: String,
+    pub requires_arguments: bool,
     pub api_call: Option<String>,
     last_called: Option<DateTime<Utc>>,
 }
 
 impl Command {
-    pub fn new(response: String, timeout_seconds: u32, api_call: Option<String>) -> Self {
+    pub fn new(
+        response: String,
+        timeout_seconds: u32,
+        usage: String,
+        requires_arguments: bool,
+        api_call: Option<String>,
+    ) -> Self {
         Self {
             response,
             timeout_seconds,
+            usage,
+            requires_arguments,
             api_call,
             last_called: None,
         }
@@ -26,10 +36,14 @@ impl Command {
     }
 }
 
-pub fn get_command(command_text: String) -> Option<Command> {
+pub fn get_command(command_text: String, arguments_passed: bool) -> Option<Command> {
     let mut map = COMMANDS.lock().unwrap();
 
     if let Some(command) = map.get_mut(command_text.as_str()) {
+        if command.requires_arguments && !arguments_passed {
+            return Some(command.clone());
+        }
+
         if command.timeout_seconds == 0
             || command.last_called.is_none()
             || command.last_called.unwrap()
@@ -37,7 +51,6 @@ pub fn get_command(command_text: String) -> Option<Command> {
                 <= Utc::now()
         {
             command.last_called = Some(Utc::now());
-
             return Some(command.clone());
         }
 
@@ -54,7 +67,13 @@ lazy_static! {
 
         commands.insert(
             "!github",
-            Command::new("https://github.com/vininew921".to_string(), 60, None),
+            Command::new(
+                "https://github.com/vininew921".to_string(),
+                60,
+                "".to_string(),
+                false,
+                None,
+            ),
         );
 
         commands.insert(
@@ -62,6 +81,8 @@ lazy_static! {
             Command::new(
                 "Musica <song> adicionada a fila".to_string(),
                 30,
+                "Song request: !sr nome da musica".to_string(),
+                true,
                 Some("play_track".to_string()),
             ),
         );

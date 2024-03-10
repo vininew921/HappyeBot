@@ -1,5 +1,5 @@
 use base64::Engine;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use tokio::io::AsyncReadExt;
 
 use crate::error::TwitchBotResult;
@@ -67,7 +67,48 @@ impl SpotifyClient {
         })
     }
 
-    pub async fn search_async(&self, query: &str) -> TwitchBotResult<SpotifyTrackResults> {
+    async fn refresh_token(&mut self) -> TwitchBotResult<()> {
+        let token = self.token.clone().unwrap();
+
+        if token.created_at.unwrap() + Duration::try_seconds(token.expires_in).unwrap() > Utc::now()
+        {
+            return Ok(());
+        }
+
+        tracing::info!("Refreshing Spotify token...");
+
+        let url = format!(
+            "https://accounts.spotify.com/api/token?grant_type=refresh_token&client_id={}&refresh_token={}",
+            self.client_id, token.refresh_token.unwrap(),
+        );
+
+        let client = reqwest::Client::new();
+        let base64auth = base64::engine::general_purpose::STANDARD
+            .encode(&format!("{}:{}", self.client_id, self.client_secret));
+
+        let request = client
+            .post(url)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .header("Authorization", format!("Basic {}", base64auth))
+            .header("content-length", 0)
+            .send()
+            .await?;
+
+        let mut token = request.json::<SpotifyToken>().await?;
+        token.created_at = Some(Utc::now());
+
+        tracing::info!("Spotify token refreshed!");
+
+        //Save access token to file
+        tokio::fs::write("spotify_token.json", serde_json::to_string(&token)?).await?;
+
+        self.token = Some(token);
+        Ok(())
+    }
+
+    pub async fn search_async(&mut self, query: &str) -> TwitchBotResult<SpotifyTrackResults> {
+        let _ = self.refresh_token().await;
+
         let url = format!("https://api.spotify.com/v1/search?q={}&type=track", query);
 
         let client = reqwest::Client::new();
@@ -83,7 +124,9 @@ impl SpotifyClient {
         Ok(response.tracks)
     }
 
-    pub async fn queue_track(&self, track: &SpotifyTrack) -> TwitchBotResult<()> {
+    pub async fn queue_track(&mut self, track: &SpotifyTrack) -> TwitchBotResult<()> {
+        let _ = self.refresh_token().await;
+
         let url = format!(
             "https://api.spotify.com/v1/me/player/queue?uri=spotify:track:{}",
             track.id

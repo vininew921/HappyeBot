@@ -42,7 +42,7 @@ pub async fn run_async(
     }
 
     let spotify_auth_token_value = spotify_auth_token.lock().await.clone();
-    let spotify_client =
+    let mut spotify_client =
         SpotifyClient::create_async(spotify_id, spotify_secret, spotify_auth_token_value, port)
             .await?;
 
@@ -68,7 +68,7 @@ pub async fn run_async(
     client.join("vynny_".to_owned())?;
 
     while let Some(message) = incoming_messages.recv().await {
-        process_message(&client, &spotify_client, message).await;
+        process_message(&client, &mut spotify_client, message).await;
     }
 
     Ok(())
@@ -76,7 +76,7 @@ pub async fn run_async(
 
 async fn process_message(
     client: &TwitchIRCClient<TCPTransport<TLS>, RefreshingLoginCredentials<TwitchTokenStorage>>,
-    spotify_client: &SpotifyClient,
+    spotify_client: &mut SpotifyClient,
     message: ServerMessage,
 ) {
     match message {
@@ -94,15 +94,21 @@ async fn process_message(
     }
 }
 
-async fn parse_command(msg: String, spotify_client: &SpotifyClient) -> Option<String> {
+async fn parse_command(msg: String, spotify_client: &mut SpotifyClient) -> Option<String> {
     let command_message = msg.split_whitespace().nth(0)?.to_lowercase();
     let arguments_string: String = msg.split_whitespace().skip(1).collect();
 
     if command_message.starts_with("!") {
-        if let Some(command) = get_command(command_message.to_string()) {
+        if let Some(command) =
+            get_command(command_message.to_string(), !arguments_string.is_empty())
+        {
             let response = command.response;
 
             if let Some(api_call) = command.api_call {
+                if arguments_string.is_empty() {
+                    return Some(command.usage);
+                }
+
                 let api_response = match api_call.as_str() {
                     "play_track" => {
                         let track = spotify_client
